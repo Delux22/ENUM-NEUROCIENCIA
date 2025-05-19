@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ENUM en Neurociencia: Red Neuronal con Registro de Pensamientos</title>
+  <!-- Cargamos D3.js y Plotly para posibles gráficas adicionales -->
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.plot.ly/plotly-2.24.1.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #controls { margin-bottom: 20px; }
+    svg { border: 1px solid #ccc; margin-bottom: 20px; }
+    .tooltip {
+      position: absolute;
+      text-align: center;
+      padding: 8px;
+      font-size: 12px;
+      background: lightgrey;
+      border: 1px solid #000;
+      border-radius: 4px;
+      pointer-events: none;
+      opacity: 0;
+    }
+    /* Recuadro donde se mostrarán los pensamientos y datos */
+    #data-log {
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #f9f9f9;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    #data-log table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    #data-log th,
+    #data-log td {
+      border: 1px solid #888;
+      padding: 5px;
+      text-align: center;
+    }
+    #data-log th { background-color: #ddd; }
+  </style>
+</head>
+<body>
+  <h1>ENUM en Neurociencia: Red Neuronal y Registro de Pensamientos</h1>
+  
+  <!-- Controles iniciales -->
+  <div id="controls">
+    <label for="alphaSlider">Parámetro ENUM (α): </label>
+    <input type="range" id="alphaSlider" min="0" max="5" step="0.1" value="2">
+    <span id="alphaValue">2</span>
+    <button id="saveNetwork">Guardar Red</button>
+    <button id="loadNetwork">Cargar Red</button>
+  </div>
+  
+  <!-- Área del SVG para la red neuronal -->
+  <svg id="network" width="800" height="600"></svg>
+  
+  <!-- Tooltip para informar sobre la neurona -->
+  <div class="tooltip" id="tooltip"></div>
+  
+  <!-- Recuadro para el registro de pensamientos y datos -->
+  <div id="data-log">
+    <h3>Registro de Pensamientos y Datos</h3>
+    <table id="logTable">
+      <thead>
+        <tr>
+          <th>Timestamp</th>
+          <th>Neuron ID</th>
+          <th>Excitabilidad</th>
+          <th>Pensamiento</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- Las filas se agregarán aquí -->
+      </tbody>
+    </table>
+  </div>
+  
+  <script>
+    // Parámetros iniciales y datos básicos
+    const width = 800, height = 600;
+    let alpha = parseFloat(document.getElementById("alphaSlider").value);
+    // Lista de pensamientos posibles
+    const thoughts = [
+      "Idea brillante", 
+      "Conciencia emergente", 
+      "Reflexión profunda", 
+      "¡Eureka!", 
+      "Sugerencia abstracta"
+    ];
+    
+    // Crear un array de 20 neuronas. Cada neurona tiene:
+    // - id: para identificarla.
+    // - excitability: un valor aleatorio que determinará su tamaño.
+    // - lastThought: que se actualizará con el pensamiento más reciente.
+    const numNodes = 20;
+    const nodes = d3.range(numNodes).map(i => ({
+      id: i,
+      excitability: Math.random().toFixed(2),
+      lastThought: ""
+    }));
+    
+    // Crear conexiones aleatorias entre neuronas para simular sinapsis
+    const links = [];
+    for (let i = 0; i < numNodes; i++) {
+      for (let j = i + 1; j < numNodes; j++) {
+        if (Math.random() < 0.15) {
+          links.push({ source: i, target: j });
+        }
+      }
+    }
+    
+    // Configuración de la simulación de fuerzas con D3.js
+    const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(100))
+        .force("charge", d3.forceManyBody().strength(-200))
+        .force("center", d3.forceCenter(width / 2, height / 2));
+        
+    // Seleccionar el SVG y agregar los enlaces
+    const svg = d3.select("#network");
+    const link = svg.append("g")
+                    .attr("stroke", "#999")
+                    .attr("stroke-opacity", 0.6)
+                    .selectAll("line")
+                    .data(links)
+                    .enter().append("line")
+                    .attr("stroke-width", 2);
+    
+    // Dibujar las neuronas (nodos)
+    const node = svg.append("g")
+                    .attr("stroke", "#fff")
+                    .attr("stroke-width", 1.5)
+                    .selectAll("circle")
+                    .data(nodes)
+                    .enter().append("circle")
+                    .attr("r", d => 10 + alpha * d.excitability * 20)
+                    .attr("fill", "#69b3a2")
+                    .call(drag(simulation))
+                    .on("click", (event, d) => { generateThoughtForNeuron(d); });
+    
+    // Configuración del tooltip para mostrar datos precisos de la neurona
+    const tooltip = d3.select("#tooltip");
+    node.on("mouseover", (event, d) => {
+      tooltip.transition().duration(200).style("opacity", 0.9);
+      tooltip.html(
+        `<strong>Neurona ${d.id}</strong><br/>Excitabilidad: ${d.excitability}`
+      )
+      .style("left", (event.pageX + 10) + "px")
+      .style("top", (event.pageY - 28) + "px");
+    }).on("mouseout", () => {
+      tooltip.transition().duration(500).style("opacity", 0);
+    });
+    
+    // Actualización de posiciones para la simulación
+    simulation.on("tick", () => {
+      link.attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+      node.attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+    });
+    
+    // Funciones de drag para interacción con los nodos
+    function drag(simulation) {
+      return d3.drag()
+               .on("start", (event, d) => {
+                 if (!event.active) simulation.alphaTarget(0.3).restart();
+                 d.fx = d.x; d.fy = d.y;
+               })
+               .on("drag", (event, d) => {
+                 d.fx = event.x; d.fy = event.y;
+               })
+               .on("end", (event, d) => {
+                 if (!event.active) simulation.alphaTarget(0);
+                 d.fx = null; d.fy = null;
+               });
+    }
+    
+    // Actualizar tamaño de neuronas al cambiar el slider
+    document.getElementById("alphaSlider").addEventListener("input", function() {
+      alpha = parseFloat(this.value);
+      document.getElementById("alphaValue").textContent = alpha;
+      node.attr("r", d => 10 + alpha * d.excitability * 20);
+      simulation.alpha(1).restart();
+    });
+    
+    // Guardar y cargar la red mediante localStorage
+    document.getElementById("saveNetwork").addEventListener("click", () => {
+      const state = {
+        nodes: nodes.map(d => ({ id: d.id, x: d.x, y: d.y, excitability: d.excitability, lastThought: d.lastThought })),
+        links
+      };
+      localStorage.setItem("networkState", JSON.stringify(state));
+      alert("Red guardada exitosamente.");
+    });
+    
+    document.getElementById("loadNetwork").addEventListener("click", () => {
+      const savedState = JSON.parse(localStorage.getItem("networkState"));
+      if (!savedState) {
+        alert("No hay una red guardada.");
+        return;
+      }
+      nodes.forEach((d, i) => {
+        d.x = savedState.nodes[i].x;
+        d.y = savedState.nodes[i].y;
+        d.excitability = savedState.nodes[i].excitability;
+        d.lastThought = savedState.nodes[i].lastThought;
+      });
+      simulation.alpha(1).restart();
+      alert("Red cargada exitosamente.");
+    });
+    
+    // Función para generar un pensamiento para una neurona y actualizar su registro
+    function generateThoughtForNeuron(neuron, customMessage) {
+      const thought = customMessage || thoughts[Math.floor(Math.random() * thoughts.length)];
+      neuron.lastThought = thought;
+      
+      // Mostrar el pensamiento en el lienzo
+      svg.append("text")
+         .text(thought)
+         .attr("x", neuron.x)
+         .attr("y", neuron.y)
+         .attr("fill", "darkblue")
+         .attr("font-size", "16px")
+         .attr("text-anchor", "middle")
+         .attr("opacity", 1)
+         .transition()
+           .duration(3000)
+           .attr("y", neuron.y - 40)
+           .attr("opacity", 0)
+           .remove();
+      
+      // Añadir el registro en la tabla del recuadro
+      addDataLog(neuron);
+    }
+    
+    // Función para agregar una nueva fila a la tabla de registro de pensamientos y datos
+    function addDataLog(neuron) {
+      const tbody = document.querySelector("#logTable tbody");
+      const tr = document.createElement("tr");
+      const timestamp = new Date().toLocaleTimeString();
+      tr.innerHTML = `<td>${timestamp}</td>
+                      <td>${neuron.id}</td>
+                      <td>${neuron.excitability}</td>
+                      <td>${neuron.lastThought}</td>`;
+      tbody.appendChild(tr);
+    }
+    
+    // Simulación: Cada 5 segundos se generan pensamientos aleatorios en algunas neuronas.
+    setInterval(() => {
+      nodes.forEach(neuron => {
+        if (Math.random() < 0.1) {
+          generateThoughtForNeuron(neuron);
+        }
+      });
+    }, 5000);
+  </script>
+</body>
+</html>
